@@ -58,9 +58,14 @@ describe("authentik_users_list", () => {
 
 describe("selectTools", () => {
   it("filters by domain", () => {
-    expect(selectTools(testEnv({ MCP_ENABLED_DOMAINS: "groups" }))).toHaveLength(0);
-    expect(selectTools(testEnv({ MCP_READ_ONLY: "true" })).map((t) => t.name)).toContain(
-      "authentik_users_list",
-    );
+    const names = selectTools(testEnv({ MCP_ENABLED_DOMAINS: "groups" })).map((t) => t.name);
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.every((name) => name.startsWith("authentik_groups_"))).toBe(true);
+  });
+
+  it("exposes only read tools in read-only mode", () => {
+    const tools = selectTools(testEnv({ MCP_READ_ONLY: "true" }));
+    expect(tools.map((t) => t.name)).toContain("authentik_users_list");
+    expect(tools.every((tool) => tool.kind === "read")).toBe(true);
   });
 });

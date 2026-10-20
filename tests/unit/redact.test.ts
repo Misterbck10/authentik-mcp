@@ -18,3 +18,15 @@ describe("redact", () => {
     expect(input.password).toBe("p");
   });
 });
+
+describe("redact scope", () => {
+  it("keeps non-secret fields that merely mention tokens or keys", () => {
+    const input = { key: "locale", deletedTokens: 2, revokeTokens: true, clientSecret: "s" };
+    expect(redact(input)).toEqual({
+      key: "locale",
+      deletedTokens: 2,
+      revokeTokens: true,
+      clientSecret: REDACTED,
+    });
+  });
+});

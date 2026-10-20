@@ -2,9 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import type { Env } from "@/lib/config/env";
 import type { AnyToolDefinition } from "./define-tool";
 import { registerDefinition } from "./define-tool";
-import { usersList } from "./users/list";
+import { groupTools } from "./groups";
+import { userTools } from "./users";
 
-export const ALL_TOOLS: readonly AnyToolDefinition[] = [usersList];
+export const ALL_TOOLS: readonly AnyToolDefinition[] = [...userTools, ...groupTools];
 
 /** Tools exposed for this environment: enabled domains only; read tools only in read-only mode. */
 export function selectTools(
