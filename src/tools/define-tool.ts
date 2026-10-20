@@ -35,6 +35,8 @@ export interface ToolDefinition<Input extends z.ZodObject> {
   description: string;
   input: Input;
   idempotent?: boolean;
+  /** Result intentionally carries a freshly generated secret (e.g. client_secret on create). */
+  returnsNewSecret?: boolean;
   /** Return values are JSON-serialised and redacted unless `kind` is "sensitive". */
   handler: (args: z.infer<Input>, ctx: ToolContext) => Promise<unknown>;
 }
@@ -92,7 +94,9 @@ export function registerDefinition(server: McpServer, definition: AnyToolDefinit
           result: "ok",
           durationMs: Date.now() - started,
         });
-        return textResult(definition.kind === "sensitive" ? output : redact(output));
+        return textResult(
+          definition.kind === "sensitive" || definition.returnsNewSecret ? output : redact(output),
+        );
       } catch (error) {
         const payload = toErrorPayload(error);
         audit({

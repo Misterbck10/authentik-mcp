@@ -6,7 +6,8 @@ export const slug = z
   .max(50)
   .regex(/^[-a-zA-Z0-9_]+$/, "slug may only contain letters, numbers, - and _");
 
-export const uuid = z.uuid();
+// Any 8-4-4-4-12 hex id; z.uuid() would also enforce RFC version bits.
+export const uuid = z.guid();
 
 export const email = z.email();
 
