@@ -3,6 +3,7 @@ import type { Env } from "@/lib/config/env";
 import type { AnyToolDefinition } from "./define-tool";
 import { registerDefinition } from "./define-tool";
 import { applicationTools } from "./applications";
+import { brandingTools } from "./branding";
 import { groupTools } from "./groups";
 import { outpostTools } from "./outposts";
 import { providerTools } from "./providers";
@@ -30,6 +31,7 @@ export const ALL_TOOLS: readonly AnyToolDefinition[] = [
   ...rbacTools,
   ...sourceTools,
   ...systemTools,
+  ...brandingTools,
 ];
 
 /** Tools exposed for this environment: enabled domains only; read tools only in read-only mode. */

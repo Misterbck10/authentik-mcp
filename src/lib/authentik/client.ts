@@ -74,6 +74,25 @@ export class AuthentikClient {
     return this.request<T>("PATCH", path, { body });
   }
 
+  /** multipart/form-data POST (file uploads). Never retried. */
+  async upload<T>(path: string, form: FormData): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.apiBase}${path}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.config.token}`, Accept: "application/json" },
+        body: form,
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+        cache: "no-store",
+      });
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+      throw networkError(timedOut ? "timeout" : "unreachable");
+    }
+    if (!response.ok) throw normalizeError(response.status, await parseBody(response));
+    return (await parseBody(response)) as T;
+  }
+
   delete<T = void>(path: string, query?: Query): Promise<T> {
     return this.request<T>("DELETE", path, { query });
   }

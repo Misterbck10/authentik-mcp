@@ -7,7 +7,10 @@ const config = [
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
     },
   },
   { ignores: [".next/**", "node_modules/**", "src/lib/authentik/schema.d.ts", "next-env.d.ts"] },
