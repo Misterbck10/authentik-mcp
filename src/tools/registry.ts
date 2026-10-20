@@ -7,6 +7,14 @@ import { groupTools } from "./groups";
 import { outpostTools } from "./outposts";
 import { providerTools } from "./providers";
 import { userTools } from "./users";
+import { blueprintTools } from "./blueprints/tools";
+import { cryptoTools } from "./crypto/tools";
+import { eventTools } from "./events/tools";
+import { flowTools } from "./flows/tools";
+import { policyTools } from "./policies/tools";
+import { rbacTools } from "./rbac/tools";
+import { sourceTools } from "./sources/tools";
+import { systemTools } from "./system/tools";
 
 export const ALL_TOOLS: readonly AnyToolDefinition[] = [
   ...userTools,
@@ -14,6 +22,14 @@ export const ALL_TOOLS: readonly AnyToolDefinition[] = [
   ...applicationTools,
   ...providerTools,
   ...outpostTools,
+  ...blueprintTools,
+  ...cryptoTools,
+  ...eventTools,
+  ...flowTools,
+  ...policyTools,
+  ...rbacTools,
+  ...sourceTools,
+  ...systemTools,
 ];
 
 /** Tools exposed for this environment: enabled domains only; read tools only in read-only mode. */
