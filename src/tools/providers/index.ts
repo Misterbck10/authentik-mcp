@@ -1,3 +1,4 @@
+import { providersCreateScim } from "./create-scim";
 import {
   providersDelete,
   providersGet,
@@ -10,6 +11,7 @@ export const providerTools = [
   providersList,
   providersGet,
   providersUpdate,
+  providersCreateScim,
   providersDelete,
   providersGetSecret,
 ];
