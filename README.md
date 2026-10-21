@@ -56,7 +56,8 @@ O ambiente é validado com zod no primeiro pedido; uma variável inválida devol
    - `branding`: Brand, Flow (change), Prompt, File (add/delete), Application/Source (change)
      A lista exata e validada (123 permissões) está em [`docs/permissions.md`](docs/permissions.md) / [`docs/permissions.json`](docs/permissions.json).
 3. Crie um grupo (ex.: `mcp-service`), atribua-lhe o Role e adicione `svc-mcp` ao grupo.
-4. **Directory → Tokens → Create** para `svc-mcp`, intenção _API_, **Expiring desligado**. Use-o em `AUTHENTIK_TOKEN`.
+4. **Directory → Tokens → Create** para `svc-mcp`, intenção **API** (não _app password_: o token criado junto com a conta de serviço é app password e não serve para a API), **Expiring desligado**. Use-o em `AUTHENTIK_TOKEN`.
+5. Valide com `pnpm verify:permissions` (lê `.env.production.local`; faz primeiro um único pedido de teste para não disparar bloqueadores como o CrowdSec).
 
 Ative só os domínios de que precisa (`MCP_ENABLED_DOMAINS`) e dê ao Role só as permissões desses domínios.
 
