@@ -64,6 +64,22 @@ export const blueprintsApply = defineTool({
   },
 });
 
+const FINAL_STATUS = new Set(["successful", "warning", "error", "orphaned"]);
+
+/** Applying is asynchronous (worker task); poll briefly so the result reflects the outcome. */
+async function waitForStatus(
+  client: Parameters<typeof listPaginated>[0],
+  pk: string,
+  timeoutMs = 30_000,
+): Promise<Blueprint> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const bp = await client.get<Blueprint>(`/managed/blueprints/${pk}/`);
+    if (FINAL_STATUS.has(bp.status) || Date.now() > deadline) return bp;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+}
+
 export const blueprintsAvailable = defineTool({
   name: "authentik_blueprints_available",
   domain: "blueprints",
@@ -113,8 +129,9 @@ export const blueprintsInstantiate = defineTool({
       context: args.context ?? {},
       enabled: true,
     } satisfies Schema<"BlueprintInstanceRequest">);
-    const applied = await client.post<Blueprint>(`/managed/blueprints/${instance.pk}/apply/`);
-    return { applied: true, blueprint: compactBlueprint(applied) };
+    await client.post<Blueprint>(`/managed/blueprints/${instance.pk}/apply/`);
+    const result = await waitForStatus(client, instance.pk);
+    return { applied: result.status === "successful", blueprint: compactBlueprint(result) };
   },
 });
 
