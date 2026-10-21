@@ -2,8 +2,20 @@ import { getEnv } from "@/lib/config/env";
 
 export type AuthentikHealth = { ok: true; latencyMs: number } | { ok: false; reason: string };
 
-/** Pings authentik's version endpoint. Returns no instance data to callers. */
-export async function pingAuthentik(): Promise<AuthentikHealth> {
+// /api/health and the landing page are public; caching keeps anonymous traffic from turning
+// into admin-token requests against authentik (rate limits, reputation/IP bans).
+const CACHE_MS = 30_000;
+let cached: { at: number; result: Promise<AuthentikHealth> } | undefined;
+
+/** Pings authentik's version endpoint (cached for 30 s). Returns no instance data to callers. */
+export function pingAuthentik(): Promise<AuthentikHealth> {
+  if (!cached || Date.now() - cached.at > CACHE_MS) {
+    cached = { at: Date.now(), result: ping() };
+  }
+  return cached.result;
+}
+
+async function ping(): Promise<AuthentikHealth> {
   const env = getEnv();
   const started = Date.now();
   try {

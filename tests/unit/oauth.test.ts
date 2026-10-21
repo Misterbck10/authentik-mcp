@@ -21,7 +21,7 @@ function sign(
   claims: JWTPayload & { groups?: string[] },
   overrides: { exp?: string; iss?: string; aud?: string } = {},
 ) {
-  return new SignJWT(claims)
+  return new SignJWT({ uid: "u-1", azp: "mcp-client", ...claims })
     .setProtectedHeader({ alg: "RS256", kid: "k1" })
     .setIssuer(overrides.iss ?? ISSUER)
     .setAudience(overrides.aud ?? "mcp-client")
@@ -52,6 +52,14 @@ describe("verifyOAuthToken", () => {
     ]) {
       expect(await verifyOAuthToken(token, config, keySet)).toMatchObject({ ok: false });
     }
+  });
+
+  it("rejects ID tokens (no uid/azp) even though iss, aud and key match", async () => {
+    const idToken = await sign({ uid: undefined, azp: undefined, preferred_username: "ana" });
+    expect(await verifyOAuthToken(idToken, config, keySet)).toMatchObject({
+      ok: false,
+      reason: "not an access token",
+    });
   });
 
   it("rejects tokens signed by another key", async () => {

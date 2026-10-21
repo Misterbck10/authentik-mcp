@@ -43,6 +43,8 @@ interface AuthentikClaims extends JWTPayload {
   email?: string;
   groups?: string[];
   scope?: string;
+  uid?: string;
+  azp?: string;
 }
 
 export type VerifyResult = { ok: true; authInfo: AuthInfo } | { ok: false; reason: string };
@@ -62,6 +64,11 @@ export async function verifyOAuthToken(
     }));
   } catch {
     return { ok: false, reason: "invalid token" };
+  }
+  // ID tokens share iss/aud/key with access tokens. authentik builds the access token from the
+  // ID token and adds `uid` and `azp` (IDToken.to_access_token), so require both.
+  if (typeof payload.uid !== "string" || payload.azp !== config.clientId) {
+    return { ok: false, reason: "not an access token" };
   }
 
   const groups = payload.groups ?? [];

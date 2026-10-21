@@ -13,8 +13,9 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ status: "error", reason: "invalid configuration" }, { status: 503 });
   }
   const authentik = await pingAuthentik();
+  // Public endpoint: report up/down only, not latency or failure details.
   return NextResponse.json(
-    { status: authentik.ok ? "ok" : "degraded", authentik },
+    { status: authentik.ok ? "ok" : "degraded" },
     { status: authentik.ok ? 200 : 503 },
   );
 }
