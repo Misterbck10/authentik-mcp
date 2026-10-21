@@ -54,7 +54,7 @@ O ambiente é validado com zod no primeiro pedido; uma variável inválida devol
    - `sources`: Source (view), Schedule (view/send) · `rbac`: Role, Permission · `blueprints`: Blueprint instance
    - `system`: System settings, System info, Task/Worker (view)
    - `branding`: Brand, Flow (change), Prompt, File (add/delete), Application/Source (change)
-     Depois de ligado, `authentik_rbac_permissions_list` lista os codenames exatos da sua instância.
+     A lista exata e validada (123 permissões) está em [`docs/permissions.md`](docs/permissions.md) / [`docs/permissions.json`](docs/permissions.json).
 3. Crie um grupo (ex.: `mcp-service`), atribua-lhe o Role e adicione `svc-mcp` ao grupo.
 4. **Directory → Tokens → Create** para `svc-mcp`, intenção _API_, **Expiring desligado**. Use-o em `AUTHENTIK_TOKEN`.
 
