@@ -4,7 +4,7 @@ import type { Schema } from "@/lib/authentik/types";
 import { groupRef } from "@/lib/validation";
 import { defineTool } from "../define-tool";
 import { compactGroup } from "./compact";
-import { groupFields } from "./create";
+import { groupFields, resolveParents } from "./create";
 
 export const groupsUpdate = defineTool({
   name: "authentik_groups_update",
@@ -24,9 +24,7 @@ export const groupsUpdate = defineTool({
   }),
   handler: async (args, { client }) => {
     const current = await resolveGroup(client, args.group);
-    const parents = args.parents
-      ? await Promise.all(args.parents.map(async (ref) => (await resolveGroup(client, ref)).pk))
-      : undefined;
+    const parents = args.parents ? await resolveParents(client, args.parents) : undefined;
     const attributes = args.attributes
       ? args.replaceAttributes
         ? args.attributes

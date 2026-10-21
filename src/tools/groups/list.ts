@@ -25,7 +25,8 @@ export const groupsList = defineTool({
         search: args.search,
         members_by_username: args.member ? [args.member] : undefined,
         is_superuser: args.isSuperuser,
-        include_users: true,
+        // memberCount uses the always-present `users` pk list; include_users would load every
+        // member object.
         include_parents: true,
         include_children: true,
         ordering: "name",

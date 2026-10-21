@@ -3,6 +3,7 @@ import { resolveGroup, resolveUser } from "@/lib/authentik/resolve";
 import { confirmField, dryRun } from "@/lib/safety/confirm";
 import { groupRef, userRef } from "@/lib/validation";
 import { defineTool } from "../define-tool";
+import { assertNoSuperuserAncestry } from "./create";
 
 const usersInput = z.array(userRef).min(1).max(100);
 
@@ -36,10 +37,13 @@ export const groupsAddMembers = defineTool({
   kind: "write",
   idempotent: true,
   title: "Add members to group",
-  description: "Add one or more users (pk, username or email) to a group.",
+  description:
+    "Add one or more users (pk, username or email) to a group. Groups that grant superuser " +
+    "(directly or through a parent) are refused.",
   input: z.object({ group: groupRef, users: usersInput }),
   handler: async (args, { client }) => {
     const group = await resolveGroup(client, args.group);
+    await assertNoSuperuserAncestry(client, [group], "a membership target");
     const users = await Promise.all(args.users.map((ref) => resolveUser(client, ref)));
     for (const user of users)
       await client.post(`/core/groups/${group.pk}/add_user/`, { pk: user.pk });
