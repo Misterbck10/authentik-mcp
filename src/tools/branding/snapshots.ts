@@ -11,9 +11,10 @@ import {
   storeSnapshot,
   type BrandingSnapshot,
 } from "@/lib/branding/snapshot";
+import { reviewCss } from "@/lib/branding/css-sanitizer";
 import { confirmField, dryRun } from "@/lib/safety/confirm";
 import { defineTool } from "../define-tool";
-import { autoSnapshot, brandRef } from "./shared";
+import { autoSnapshot, brandRef, cssPolicy } from "./shared";
 
 export const brandingSnapshot = defineTool({
   name: "authentik_branding_snapshot",
@@ -39,11 +40,13 @@ export const brandingRestore = defineTool({
   description:
     "Restore a snapshot (by id from branding_snapshot, or inline JSON). Dry-run shows exactly " +
     "which fields, flows and icons would change. A fresh snapshot of the current state is taken " +
-    "before applying, so a restore can itself be undone.",
+    "before applying, so a restore can itself be undone. Only visual fields are restored and " +
+    "CSS is checked like set_custom_css (hiding security UI needs acknowledgeHiddenSecurity).",
   input: z
     .object({
       id: z.string().max(300).optional(),
       snapshot: z.record(z.string(), z.unknown()).optional().describe("Inline snapshot JSON"),
+      acknowledgeHiddenSecurity: z.boolean().default(false),
       confirm: confirmField,
     })
     .refine((args) => !!args.id !== !!args.snapshot, { message: "Provide either id or snapshot" }),
@@ -66,6 +69,23 @@ export const brandingRestore = defineTool({
     }
     const brand = await resolveBrand(client, target.brand.uuid);
     const plan = planRestore(await captureSnapshot(client, brand), target);
+    // Restored CSS gets the same checks as set_custom_css; snapshots may be crafted or edited.
+    const restoredCss = plan.brand.branding_custom_css?.to;
+    if (restoredCss !== undefined) {
+      const review = reviewCss(typeof restoredCss === "string" ? restoredCss : "", cssPolicy(env));
+      const problems = [
+        ...(typeof restoredCss === "string" ? [] : ["branding_custom_css must be a string"]),
+        ...review.errors,
+        ...(args.acknowledgeHiddenSecurity ? [] : review.securityWarnings),
+      ];
+      if (problems.length) {
+        throw new AuthentikError({
+          status: 400,
+          code: "invalid_css",
+          message: `Snapshot CSS rejected: ${problems.join("; ")}`,
+        });
+      }
+    }
     const changes =
       Object.keys(plan.brand).length +
       plan.flows.length +

@@ -1,7 +1,14 @@
 import { randomBytes } from "node:crypto";
 import type { AuthentikClient } from "@/lib/authentik/client";
 import type { Schema } from "@/lib/authentik/types";
-import { brandVisual, diffFields, listAll, type Brand, type BrandVisual } from "./brands";
+import {
+  BRAND_VISUAL_FIELDS,
+  brandVisual,
+  diffFields,
+  listAll,
+  type Brand,
+  type BrandVisual,
+} from "./brands";
 import { listFiles, uploadBytes } from "./files";
 
 export interface BrandingSnapshot {
@@ -103,6 +110,20 @@ export interface RestorePlan {
   sources: { slug: string; type: string; from: string; to: string }[];
 }
 
+const FLOW_VISUAL_FIELDS = ["title", "background", "layout", "compatibility_mode"] as const;
+
+/** Keeps only `keys` of an untrusted object, so a crafted snapshot cannot patch other fields. */
+const pick = (value: unknown, keys: readonly string[]): Record<string, unknown> => {
+  const source = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return Object.fromEntries(keys.filter((key) => key in source).map((key) => [key, source[key]]));
+};
+
+const asArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+/**
+ * Diffs the current state against an untrusted target snapshot. Only visual fields are taken
+ * from the target; slugs must exist now and source types come from the current state.
+ */
 export function planRestore(current: BrandingSnapshot, target: BrandingSnapshot): RestorePlan {
   const bySlug = <T extends { slug: string }>(items: T[]) =>
     new Map(items.map((item) => [item.slug, item]));
@@ -111,25 +132,37 @@ export function planRestore(current: BrandingSnapshot, target: BrandingSnapshot)
   const sources = bySlug(current.sources);
   return {
     brand: diffFields(
-      current.brand.fields as Record<string, unknown>,
-      target.brand.fields as Record<string, unknown>,
+      pick(current.brand.fields, BRAND_VISUAL_FIELDS),
+      pick(target.brand?.fields, BRAND_VISUAL_FIELDS),
     ),
-    flows: target.flows
-      .filter((flow) => flows.has(flow.slug))
-      .map((flow) => {
-        const { slug, ...fields } = flow;
-        const { slug: _ignored, ...now } = flows.get(slug)!;
-        return { slug, changes: diffFields(now, fields) };
-      })
+    flows: asArray<BrandingSnapshot["flows"][number]>(target.flows)
+      .filter((flow) => flows.has(flow?.slug))
+      .map((flow) => ({
+        slug: flow.slug,
+        changes: diffFields(
+          pick(flows.get(flow.slug), FLOW_VISUAL_FIELDS),
+          pick(flow, FLOW_VISUAL_FIELDS),
+        ),
+      }))
       .filter((entry) => Object.keys(entry.changes).length > 0),
-    applications: target.applications
-      .filter((app) => apps.has(app.slug) && apps.get(app.slug)!.meta_icon !== app.meta_icon)
+    applications: asArray<BrandingSnapshot["applications"][number]>(target.applications)
+      .filter(
+        (app) =>
+          typeof app?.meta_icon === "string" &&
+          apps.has(app.slug) &&
+          apps.get(app.slug)!.meta_icon !== app.meta_icon,
+      )
       .map((app) => ({ slug: app.slug, from: apps.get(app.slug)!.meta_icon, to: app.meta_icon })),
-    sources: target.sources
-      .filter((src) => sources.has(src.slug) && sources.get(src.slug)!.icon !== src.icon)
+    sources: asArray<BrandingSnapshot["sources"][number]>(target.sources)
+      .filter(
+        (src) =>
+          typeof src?.icon === "string" &&
+          sources.has(src.slug) &&
+          sources.get(src.slug)!.icon !== src.icon,
+      )
       .map((src) => ({
         slug: src.slug,
-        type: src.type,
+        type: sources.get(src.slug)!.type,
         from: sources.get(src.slug)!.icon,
         to: src.icon,
       })),
@@ -157,6 +190,7 @@ export async function applyRestore(
     });
   }
   for (const source of plan.sources) {
+    if (!/^[a-z0-9_]+$/.test(source.type)) throw new Error(`Invalid source type: ${source.type}`);
     await client.patch(`/sources/${source.type}/${encodeURIComponent(source.slug)}/`, {
       icon: source.to,
     });

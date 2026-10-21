@@ -17,6 +17,12 @@ export interface CssReview {
 }
 
 const FORBIDDEN = [
+  // Escapes could hide a scheme or host from the url() allowlist (e.g. url(\68ttps://evil)).
+  { pattern: /\\/, message: "CSS escapes (backslashes) are not allowed" },
+  {
+    pattern: /image-set\s*\([^)]*["']/i,
+    message: "image-set() with string URLs is not allowed; use url()",
+  },
   { pattern: /javascript:/i, message: "javascript: URLs are not allowed" },
   { pattern: /expression\s*\(/i, message: "expression() is not allowed" },
   { pattern: /<\/?\s*(style|script)/i, message: "HTML tags are not allowed in CSS" },

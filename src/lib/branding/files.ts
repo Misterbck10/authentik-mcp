@@ -1,3 +1,5 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import type { AuthentikClient } from "@/lib/authentik/client";
 import { AuthentikError } from "@/lib/authentik/errors";
 import type { Schema } from "@/lib/authentik/types";
@@ -63,33 +65,99 @@ export function prepareImage(bytes: Uint8Array, maxMb: number): PreparedImage {
   return { type, bytes: new TextEncoder().encode(clean), sanitized: true };
 }
 
-/** Downloads an https image with a size cap. */
-export async function fetchImage(url: string, maxMb: number): Promise<Uint8Array> {
-  const parsed = new URL(url);
-  if (parsed.protocol !== "https:") {
-    throw new AuthentikError({
-      status: 400,
-      code: "insecure_url",
-      message: "Source URL must use https",
-    });
+const MAX_REDIRECTS = 3;
+
+const badUrl = (message: string) =>
+  new AuthentikError({ status: 400, code: "insecure_url", message });
+
+/** True for loopback, private, link-local (cloud metadata), CGNAT and other non-public ranges. */
+export function isPrivateAddress(address: string): boolean {
+  const ip = address.toLowerCase().replace(/^\[|\]$/g, "");
+  const v4 = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
+  if (isIP(v4) === 4) {
+    const [a, b] = v4.split(".").map(Number) as [number, number];
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
   }
-  const response = await fetch(parsed, { signal: AbortSignal.timeout(10_000), redirect: "follow" });
-  if (!response.ok) {
-    throw new AuthentikError({
-      status: 400,
-      code: "download_failed",
-      message: `Could not download image (${response.status})`,
-    });
+  return ip === "::" || ip === "::1" || /^f[cd]/.test(ip) || /^fe[89ab]/.test(ip);
+}
+
+async function assertPublicHttps(url: URL): Promise<void> {
+  if (url.protocol !== "https:") throw badUrl("Source URL must use https");
+  const addresses = isIP(url.hostname.replace(/^\[|\]$/g, ""))
+    ? [{ address: url.hostname }]
+    : await lookup(url.hostname, { all: true }).catch(() => {
+        throw badUrl(`Cannot resolve ${url.hostname}`);
+      });
+  if (addresses.some(({ address }) => isPrivateAddress(address))) {
+    throw badUrl("Source URL must point to a public host");
   }
-  const declared = Number(response.headers.get("content-length") ?? 0);
-  if (declared > maxMb * 1024 * 1024) {
-    throw new AuthentikError({
+}
+
+/** Reads at most `limit` bytes, aborting as soon as the stream exceeds it. */
+async function readCapped(response: Response, limit: number, maxMb: number): Promise<Uint8Array> {
+  const tooLarge = () =>
+    new AuthentikError({
       status: 400,
       code: "file_too_large",
       message: `Image exceeds ${maxMb} MB`,
     });
+  if (Number(response.headers.get("content-length") ?? 0) > limit) throw tooLarge();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = response.body?.getReader();
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      throw tooLarge();
+    }
+    chunks.push(value);
   }
-  return new Uint8Array(await response.arrayBuffer());
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+/**
+ * Downloads a public https image with a size cap. Redirects are followed manually so every hop
+ * is re-checked; private/internal addresses (SSRF targets such as cloud metadata) are refused.
+ */
+export async function fetchImage(url: string, maxMb: number): Promise<Uint8Array> {
+  let target = new URL(url);
+  const signal = AbortSignal.timeout(10_000);
+  for (let hop = 0; ; hop++) {
+    await assertPublicHttps(target);
+    const response = await fetch(target, { signal, redirect: "manual" });
+    const location = response.headers.get("location");
+    if (response.status >= 300 && response.status < 400 && location) {
+      if (hop >= MAX_REDIRECTS) throw badUrl("Too many redirects");
+      target = new URL(location, target);
+      continue;
+    }
+    if (!response.ok) {
+      throw new AuthentikError({
+        status: 400,
+        code: "download_failed",
+        message: `Could not download image (${response.status})`,
+      });
+    }
+    return readCapped(response, maxMb * 1024 * 1024, maxMb);
+  }
 }
 
 export { MIME };

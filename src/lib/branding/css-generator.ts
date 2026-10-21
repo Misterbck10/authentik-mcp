@@ -22,8 +22,18 @@ export const designTokens = z.object({
     .string()
     .regex(/^\d+(\.\d+)?(rem|em|px)$/)
     .default("0.375rem"),
-  fontFamily: z.string().max(200).optional().describe('e.g. "Inter, system-ui, sans-serif"'),
-  fontUrl: z.url().optional().describe("Stylesheet URL, e.g. Google Fonts css2 link"),
+  // Both are pasted into generated CSS, so characters that could close a value or rule are refused.
+  fontFamily: z
+    .string()
+    .max(200)
+    .regex(/^[\w\s,'"-]+$/, "font names, commas and quotes only")
+    .optional()
+    .describe('e.g. "Inter, system-ui, sans-serif"'),
+  fontUrl: z
+    .url({ protocol: /^https$/ })
+    .regex(/^[^\s"\\]+$/, "URL must not contain quotes, backslashes or whitespace")
+    .optional()
+    .describe("Stylesheet URL, e.g. Google Fonts css2 link"),
   includePartOverrides: z
     .boolean()
     .default(false)

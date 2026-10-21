@@ -69,11 +69,12 @@ export const applyDesignTokens = defineTool({
     const brand = await resolveBrand(client, args.brand);
     const css = generateCss(args.tokens);
     const review = reviewCss(css, cssPolicy(env));
-    if (!review.ok) {
+    // Generated CSS never hides UI on its own; a security warning means a token injected rules.
+    if (!review.ok || review.securityWarnings.length) {
       throw new AuthentikError({
         status: 400,
         code: "invalid_css",
-        message: review.errors.join("; "),
+        message: [...review.errors, ...review.securityWarnings].join("; "),
       });
     }
     const contrast = [...contrastChecks(args.tokens), ...buttonContrast(args.tokens)];
