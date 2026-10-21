@@ -1,7 +1,8 @@
-// Exact secret field names (snake_case and camelCase) plus *password / *secret suffixes.
-// Kept narrow on purpose: counters like "deletedTokens" or attribute "key" fields must survive.
+// Exact secret field names (snake_case and camelCase) plus *password / *secret / *_token /
+// *Token suffixes (e.g. plex_token). Kept narrow on purpose: counters like "deletedTokens"
+// or attribute "key" fields must survive.
 const SENSITIVE_KEY =
-  /(password|secret)$|^(token|access_?token|refresh_?token|id_?token|api_?key|private_?key|key_?data|credentials?|authorization|cookie)$/i;
+  /(password|secret)$|(_token|[a-z]Token)$|^(token|access_?token|refresh_?token|id_?token|api_?key|private_?key|key_?data|credentials?|authorization|cookie)$/i;
 
 export const REDACTED = "[REDACTED]";
 

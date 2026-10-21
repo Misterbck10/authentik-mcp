@@ -29,4 +29,14 @@ describe("redact scope", () => {
       clientSecret: REDACTED,
     });
   });
+
+  it("masks credential fields ending in _token / Token", () => {
+    const input = { slug: "plex", plex_token: "t", sessionToken: "t", deletedTokens: 3 };
+    expect(redact(input)).toEqual({
+      slug: "plex",
+      plex_token: REDACTED,
+      sessionToken: REDACTED,
+      deletedTokens: 3,
+    });
+  });
 });
