@@ -1,5 +1,5 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import { verifyApiKey } from "@/lib/auth/mcp-auth";
+import { verifyBearer } from "@/lib/auth/mcp-auth";
 import { getEnv } from "@/lib/config/env";
 import { registerPrompts } from "@/prompts";
 import { registerResources } from "@/resources";
@@ -22,6 +22,11 @@ const mcpHandler = createMcpHandler(
   },
 );
 
-const handler = withMcpAuth(mcpHandler, verifyApiKey, { required: true });
+// Resolved per request so the env is only read at runtime (not during next build).
+const handler = (req: Request) =>
+  withMcpAuth(mcpHandler, verifyBearer, {
+    required: true,
+    resourceUrl: getEnv().MCP_PUBLIC_URL,
+  })(req);
 
 export { handler as GET, handler as POST, handler as DELETE };

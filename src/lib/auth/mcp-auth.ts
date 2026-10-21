@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { getEnv } from "@/lib/config/env";
+import { oauthConfig, verifyOAuthToken } from "./oauth";
 
 export interface ApiKey {
   name: string;
@@ -20,10 +21,23 @@ export function findApiKeyName(token: string, keys: readonly ApiKey[]): string |
   return match;
 }
 
-/** Bearer verifier for `withMcpAuth`. `clientId` carries the API key name for audit logs. */
-export function verifyApiKey(_req: Request, bearerToken?: string): AuthInfo | undefined {
+const looksLikeJwt = (token: string) => token.split(".").length === 3;
+
+/**
+ * Bearer verifier for `withMcpAuth`: API keys first, then (when configured) authentik-issued
+ * OAuth access tokens. `clientId` carries the key name or `oauth:<username>` for audit logs.
+ */
+export async function verifyBearer(
+  _req: Request,
+  bearerToken?: string,
+): Promise<AuthInfo | undefined> {
   if (!bearerToken) return undefined;
-  const name = findApiKeyName(bearerToken, getEnv().MCP_API_KEYS);
-  if (!name) return undefined;
-  return { token: bearerToken, clientId: name, scopes: [] };
+  const env = getEnv();
+  const name = findApiKeyName(bearerToken, env.MCP_API_KEYS);
+  if (name) return { token: bearerToken, clientId: name, scopes: [] };
+
+  const oauth = oauthConfig(env);
+  if (!oauth || !looksLikeJwt(bearerToken)) return undefined;
+  const result = await verifyOAuthToken(bearerToken, oauth);
+  return result.ok ? result.authInfo : undefined;
 }

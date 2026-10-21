@@ -2,3 +2,5 @@ allowBuilds:
   esbuild: true
   unrs-resolver: true
   sharp: true
+minimumReleaseAgeExclude:
+  - jose@6.2.13

@@ -43,29 +43,53 @@ const apiKeySchema = z
   })
   .refine((key) => key.secret.length >= 32, "secrets must be at least 32 characters");
 
-const envSchema = z.object({
-  AUTHENTIK_URL: z.url({ protocol: /^https?$/ }).transform((url) => url.replace(/\/+$/, "")),
-  AUTHENTIK_TOKEN: z.string().min(1, "is required"),
-  MCP_API_KEYS: z.string().min(1, "is required").transform(csv).pipe(z.array(apiKeySchema).min(1)),
-  MCP_READ_ONLY: booleanString,
-  MCP_ENABLED_DOMAINS: z
-    .string()
-    .optional()
-    .transform((value) => (value ? csv(value) : DEFAULT_DOMAINS))
-    .pipe(z.array(z.enum(DOMAINS))),
-  MCP_BRANDING_MAX_CSS_KB: z.coerce.number().int().positive().default(100),
-  MCP_BRANDING_MAX_IMAGE_MB: z.coerce.number().positive().max(25).default(5),
-  MCP_BRANDING_ALLOWED_ASSET_HOSTS: z
-    .string()
-    .default("fonts.googleapis.com,fonts.gstatic.com")
-    .transform(csv),
-  MCP_MAX_PAGE_ITEMS: z.coerce.number().int().positive().max(1000).default(200),
-  AUTHENTIK_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
-  AUTHENTIK_DEFAULT_AUTH_FLOW: z
-    .string()
-    .default("default-provider-authorization-implicit-consent"),
-  AUTHENTIK_DEFAULT_INVALIDATION_FLOW: z.string().default("default-provider-invalidation-flow"),
-});
+const envSchema = z
+  .object({
+    AUTHENTIK_URL: z.url({ protocol: /^https?$/ }).transform((url) => url.replace(/\/+$/, "")),
+    AUTHENTIK_TOKEN: z.string().min(1, "is required"),
+    MCP_API_KEYS: z
+      .string()
+      .min(1, "is required")
+      .transform(csv)
+      .pipe(z.array(apiKeySchema).min(1)),
+    MCP_READ_ONLY: booleanString,
+    MCP_ENABLED_DOMAINS: z
+      .string()
+      .optional()
+      .transform((value) => (value ? csv(value) : DEFAULT_DOMAINS))
+      .pipe(z.array(z.enum(DOMAINS))),
+    MCP_BRANDING_MAX_CSS_KB: z.coerce.number().int().positive().default(100),
+    MCP_BRANDING_MAX_IMAGE_MB: z.coerce.number().positive().max(25).default(5),
+    MCP_BRANDING_ALLOWED_ASSET_HOSTS: z
+      .string()
+      .default("fonts.googleapis.com,fonts.gstatic.com")
+      .transform(csv),
+    MCP_MAX_PAGE_ITEMS: z.coerce.number().int().positive().max(1000).default(200),
+    AUTHENTIK_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+    AUTHENTIK_DEFAULT_AUTH_FLOW: z
+      .string()
+      .default("default-provider-authorization-implicit-consent"),
+    AUTHENTIK_DEFAULT_INVALIDATION_FLOW: z.string().default("default-provider-invalidation-flow"),
+    // OAuth 2.1 with authentik as Authorization Server (optional; API keys keep working).
+    MCP_OAUTH_ISSUER: z
+      .url({ protocol: /^https$/ })
+      .optional()
+      .describe("Issuer of the authentik OAuth2 provider, e.g. https://auth/application/o/mcp/"),
+    MCP_OAUTH_CLIENT_ID: z.string().min(1).optional().describe("Expected token audience"),
+    MCP_OAUTH_ALLOWED_GROUPS: z
+      .string()
+      .optional()
+      .transform((value) => (value ? csv(value) : [])),
+    MCP_PUBLIC_URL: z
+      .url()
+      .optional()
+      .transform((url) => url?.replace(/\/+$/, ""))
+      .describe("Public origin of this server, used as the OAuth resource identifier"),
+  })
+  .refine((env) => !env.MCP_OAUTH_ISSUER || !!env.MCP_OAUTH_CLIENT_ID, {
+    path: ["MCP_OAUTH_CLIENT_ID"],
+    message: "is required when MCP_OAUTH_ISSUER is set",
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

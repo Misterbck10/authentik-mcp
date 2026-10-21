@@ -98,6 +98,33 @@ docker run -p 3000:3000 --env-file .env authentik-mcp
   ```
 - **MCP Inspector**: `npx @modelcontextprotocol/inspector` → Streamable HTTP → `http://localhost:3000/api/mcp` + header `Authorization: Bearer <segredo>`.
 
+## OAuth via authentik (opcional)
+
+Além das API keys, o endpoint aceita **access tokens emitidos pelo próprio authentik** (OAuth 2.1, JWT validado com o JWKS do provider: assinatura, `iss`, `aud` e `exp`). Os agentes passam a autenticar-se com SSO e o audit log regista `oauth:<username>`.
+
+1. Crie a aplicação no authentik (pode usar o próprio MCP):
+   ```
+   authentik_applications_create_with_provider {
+     "name": "authentik MCP", "slug": "authentik-mcp",
+     "provider": { "type": "oauth2", "clientType": "confidential",
+       "scopes": ["openid", "email", "profile"],
+       "redirectUris": [
+         { "url": "https://claude.ai/api/mcp/auth_callback" },
+         { "url": "http://localhost:[0-9]+/callback", "matching": "regex" } ] },
+     "allowedGroups": ["mcp-admins"] }
+   ```
+2. Defina na Vercel/Docker:
+   | Variável                   | Valor                                                                           |
+   | -------------------------- | ------------------------------------------------------------------------------- |
+   | `MCP_OAUTH_ISSUER`         | issuer devolvido (ex.: `https://auth.exemplo.com/application/o/authentik-mcp/`) |
+   | `MCP_OAUTH_CLIENT_ID`      | client_id do provider (é a audience esperada)                                   |
+   | `MCP_OAUTH_ALLOWED_GROUPS` | (opcional) grupos autorizados, validados pelo claim `groups`                    |
+   | `MCP_PUBLIC_URL`           | URL pública deste servidor (ex.: `https://mcp.exemplo.com`)                     |
+3. O servidor publica `/.well-known/oauth-protected-resource` (RFC 9728) e responde 401 com `WWW-Authenticate: Bearer resource_metadata=...`, por isso clientes MCP descobrem o authentik automaticamente.
+4. O registo dinâmico de clientes (DCR) do authentik é Enterprise: nos clientes, introduza o **client ID e secret** manualmente (no Claude: _Add custom connector → Advanced settings_).
+
+As API keys continuam a funcionar em paralelo (úteis para automações e Claude Code).
+
 ## Resources e prompts
 
 - Resources: `authentik://users/{id}`, `authentik://applications/{slug}`, `authentik://flows`, `authentik://brands/{uuid}`, `authentik://branding/css-guide`
