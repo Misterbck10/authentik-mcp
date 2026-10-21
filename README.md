@@ -275,4 +275,119 @@ Esta versão visa a edição open source (`AUTHENTIK_EDITION = "oss"` em `src/li
 | branding     | `authentik_branding_snapshot`                 | write                         | Snapshot branding                                    |
 | branding     | `authentik_branding_restore`                  | write · destructive (confirm) | Restore branding snapshot                            |
 | branding     | `authentik_branding_preview_urls`             | read                          | Preview URLs                                         |
+| branding     | `authentik_branding_export_blueprint`         | read                          | Export branding as blueprint                         |     | Domain | Tool | Type | Purpose |
+| ---          | ---                                           | ---                           | ---                                                  |
+| users        | `authentik_users_list`                        | read                          | List users                                           |
+| users        | `authentik_users_get`                         | read                          | Get user                                             |
+| users        | `authentik_users_attribute_definitions`       | read                          | List user attribute definitions                      |
+| users        | `authentik_users_create`                      | write                         | Create user                                          |
+| users        | `authentik_users_update`                      | write                         | Update user                                          |
+| users        | `authentik_users_activate`                    | write                         | Activate user                                        |
+| users        | `authentik_users_deactivate`                  | write                         | Deactivate user                                      |
+| users        | `authentik_users_delete`                      | write · destructive (confirm) | Delete user                                          |
+| users        | `authentik_users_set_password`                | write · destructive (confirm) | Set user password                                    |
+| users        | `authentik_users_send_recovery_link`          | write                         | Send password set/recovery link                      |
+| users        | `authentik_users_add_to_group`                | write                         | Add user to group                                    |
+| users        | `authentik_users_remove_from_group`           | write · destructive (confirm) | Remove user from group                               |
+| users        | `authentik_users_list_sessions`               | read                          | List user sessions                                   |
+| users        | `authentik_users_revoke_sessions`             | write · destructive (confirm) | Revoke user sessions                                 |
+| users        | `authentik_users_onboard_employee`            | write                         | Onboard employee                                     |
+| users        | `authentik_users_offboard_employee`           | write · destructive (confirm) | Offboard employee                                    |
+| groups       | `authentik_groups_list`                       | read                          | List groups                                          |
+| groups       | `authentik_groups_get`                        | read                          | Get group                                            |
+| groups       | `authentik_groups_create`                     | write                         | Create group                                         |
+| groups       | `authentik_groups_update`                     | write                         | Update group                                         |
+| groups       | `authentik_groups_delete`                     | write · destructive (confirm) | Delete group                                         |
+| groups       | `authentik_groups_list_members`               | read                          | List group members                                   |
+| groups       | `authentik_groups_add_members`                | write                         | Add members to group                                 |
+| groups       | `authentik_groups_remove_members`             | write · destructive (confirm) | Remove members from group                            |
+| applications | `authentik_applications_list`                 | read                          | List applications                                    |
+| applications | `authentik_applications_get`                  | read                          | Get application                                      |
+| applications | `authentik_applications_create_with_provider` | write                         | Create application with provider (SSO)               |
+| applications | `authentik_applications_update`               | write                         | Update application                                   |
+| applications | `authentik_applications_delete`               | write · destructive (confirm) | Delete application                                   |
+| applications | `authentik_applications_check_access`         | read                          | Check application access                             |
+| applications | `authentik_applications_list_bindings`        | read                          | List application access bindings                     |
+| applications | `authentik_applications_bind`                 | write                         | Restrict application access (bind group/user/policy) |
+| applications | `authentik_applications_unbind`               | write · destructive (confirm) | Remove application access binding                    |
+| providers    | `authentik_providers_list`                    | read                          | List providers                                       |
+| providers    | `authentik_providers_get`                     | read                          | Get provider                                         |
+| providers    | `authentik_providers_update`                  | write                         | Update provider                                      |
+| providers    | `authentik_providers_create_scim`             | write                         | Create SCIM provisioning                             |
+| providers    | `authentik_providers_delete`                  | write · destructive (confirm) | Delete provider                                      |
+| providers    | `authentik_providers_get_secret`              | sensitive (confirm)           | Reveal provider secret                               |
+| outposts     | `authentik_outposts_list`                     | read                          | List outposts                                        |
+| outposts     | `authentik_outposts_get`                      | read                          | Get outpost                                          |
+| outposts     | `authentik_outposts_health`                   | read                          | Outpost health                                       |
+| outposts     | `authentik_outposts_add_provider`             | write                         | Add provider to outpost                              |
+| outposts     | `authentik_outposts_remove_provider`          | write · destructive (confirm) | Remove provider from outpost                         |
+| blueprints   | `authentik_blueprints_list`                   | read                          | List blueprints                                      |
+| blueprints   | `authentik_blueprints_available`              | read                          | List available blueprint files                       |
+| blueprints   | `authentik_blueprints_get`                    | read                          | Get blueprint                                        |
+| blueprints   | `authentik_blueprints_instantiate`            | write · destructive (confirm) | Instantiate and apply a blueprint file               |
+| blueprints   | `authentik_blueprints_apply`                  | write · destructive (confirm) | Apply blueprint                                      |
+| crypto       | `authentik_crypto_list`                       | read                          | List certificates                                    |
+| crypto       | `authentik_crypto_get`                        | read                          | Get certificate                                      |
+| crypto       | `authentik_crypto_generate`                   | write                         | Generate self-signed certificate                     |
+| crypto       | `authentik_crypto_expiring`                   | read                          | Certificates expiring soon                           |
+| events       | `authentik_events_list`                       | read                          | List audit events                                    |
+| events       | `authentik_events_get`                        | read                          | Get event                                            |
+| events       | `authentik_events_top_per_user`               | read                          | Top events per user                                  |
+| events       | `authentik_events_notifications_list`         | read                          | List notifications                                   |
+| events       | `authentik_events_audit_user_activity`        | read                          | Summarise user activity                              |
+| flows        | `authentik_flows_list`                        | read                          | List flows                                           |
+| flows        | `authentik_flows_get`                         | read                          | Get flow                                             |
+| flows        | `authentik_flows_bindings_list`               | read                          | List flow stage bindings                             |
+| flows        | `authentik_stages_list`                       | read                          | List stages                                          |
+| flows        | `authentik_invitations_create`                | write                         | Create invitation                                    |
+| flows        | `authentik_invitations_list`                  | read                          | List invitations                                     |
+| flows        | `authentik_invitations_delete`                | write · destructive (confirm) | Delete invitation                                    |
+| flows_admin  | `authentik_flows_bindings_create`             | write · destructive (confirm) | Bind stage to flow                                   |
+| flows_admin  | `authentik_flows_bindings_update`             | write · destructive (confirm) | Update flow stage binding                            |
+| flows_admin  | `authentik_flows_bindings_delete`             | write · destructive (confirm) | Remove stage from flow                               |
+| flows_admin  | `authentik_stages_invitation_create`          | write                         | Create invitation stage                              |
+| policies     | `authentik_policies_list`                     | read                          | List policies                                        |
+| policies     | `authentik_policies_get`                      | read                          | Get policy                                           |
+| policies     | `authentik_policies_bindings_list`            | read                          | List policy bindings                                 |
+| policies     | `authentik_policies_create_expression_policy` | write                         | Create expression policy                             |
+| policies     | `authentik_policies_bind`                     | write                         | Bind policy/group/user to object                     |
+| policies     | `authentik_policies_unbind`                   | write · destructive (confirm) | Delete policy binding                                |
+| policies     | `authentik_policies_test`                     | read                          | Test policy                                          |
+| rbac         | `authentik_rbac_roles_list`                   | read                          | List roles                                           |
+| rbac         | `authentik_rbac_permissions_list`             | read                          | Find permissions                                     |
+| rbac         | `authentik_rbac_roles_create`                 | write                         | Create role                                          |
+| rbac         | `authentik_rbac_roles_assign_permissions`     | write · destructive (confirm) | Grant permissions to role                            |
+| rbac         | `authentik_rbac_roles_assign_to_group`        | write · destructive (confirm) | Assign role to group                                 |
+| sources      | `authentik_sources_list`                      | read                          | List sources                                         |
+| sources      | `authentik_sources_get`                       | read                          | Get source                                           |
+| sources      | `authentik_sources_ldap_sync_status`          | read                          | LDAP sync status                                     |
+| sources      | `authentik_sources_ldap_sync`                 | write · destructive (confirm) | Trigger LDAP sync                                    |
+| system       | `authentik_system_info`                       | read                          | System info                                          |
+| system       | `authentik_system_version`                    | read                          | Version                                              |
+| system       | `authentik_system_workers_status`             | read                          | Worker status                                        |
+| system       | `authentik_system_tasks_list`                 | read                          | List background tasks                                |
+| system       | `authentik_system_settings_get`               | read                          | Get system settings                                  |
+| system       | `authentik_system_settings_update`            | write · destructive (confirm) | Update system settings                               |
+| branding     | `authentik_branding_brands_list`              | read                          | List brands                                          |
+| branding     | `authentik_branding_brands_get`               | read                          | Get brand                                            |
+| branding     | `authentik_branding_brands_create`            | write                         | Create brand                                         |
+| branding     | `authentik_branding_brands_update`            | write · destructive (confirm) | Update brand                                         |
+| branding     | `authentik_branding_brands_delete`            | write · destructive (confirm) | Delete brand                                         |
+| branding     | `authentik_branding_set_theme_defaults`       | write · destructive (confirm) | Set brand theme and language                         |
+| branding     | `authentik_branding_set_user_theme`           | write                         | Set a user's theme and language                      |
+| branding     | `authentik_branding_apply_design_tokens`      | write · destructive (confirm) | Apply brand design tokens                            |
+| branding     | `authentik_branding_set_custom_css`           | write · destructive (confirm) | Set custom CSS                                       |
+| branding     | `authentik_branding_get_effective_css`        | read                          | Get brand CSS                                        |
+| branding     | `authentik_branding_files_list`               | read                          | List stored files                                    |
+| branding     | `authentik_branding_files_upload`             | write                         | Upload image                                         |
+| branding     | `authentik_branding_files_delete`             | write · destructive (confirm) | Delete stored file                                   |
+| branding     | `authentik_branding_applications_set_icon`    | write                         | Set application icon                                 |
+| branding     | `authentik_branding_sources_set_icon`         | write                         | Set source icon                                      |
+| branding     | `authentik_branding_flows_customize`          | write · destructive (confirm) | Customise flow appearance                            |
+| branding     | `authentik_branding_prompt_fields_list`       | read                          | List form fields                                     |
+| branding     | `authentik_branding_prompt_fields_update`     | write · destructive (confirm) | Update form field texts                              |
+| branding     | `authentik_branding_email_templates`          | read                          | Email templates (info)                               |
+| branding     | `authentik_branding_snapshot`                 | write                         | Snapshot branding                                    |
+| branding     | `authentik_branding_restore`                  | write · destructive (confirm) | Restore branding snapshot                            |
+| branding     | `authentik_branding_preview_urls`             | read                          | Preview URLs                                         |
 | branding     | `authentik_branding_export_blueprint`         | read                          | Export branding as blueprint                         |
