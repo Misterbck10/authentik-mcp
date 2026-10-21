@@ -214,7 +214,9 @@ export const policiesUnbind = defineTool({
 export const policiesTest = defineTool({
   name: "authentik_policies_test",
   domain: "policies",
-  kind: "read",
+  // Not "read": evaluating runs the policy (expression policies execute Python with side
+  // effects possible), so it must stay out of MCP_READ_ONLY.
+  kind: "write",
   title: "Test policy",
   description: "Evaluate a policy for a user and return pass/fail with messages.",
   input: z.object({ pk: policyPk, user: userRef }),

@@ -58,6 +58,14 @@ export const blueprintsApply = defineTool({
   input: z.object({ pk: z.guid(), confirm: confirmField }),
   handler: async ({ pk, confirm }, { client }) => {
     const bp = await client.get<Blueprint>(`/managed/blueprints/${pk}/`);
+    // The worker skips disabled instances, so polling would only report the previous run.
+    if (bp.enabled === false) {
+      return {
+        applied: false,
+        reason: "Blueprint is disabled; enable it first.",
+        blueprint: compactBlueprint(bp),
+      };
+    }
     if (!confirm) return dryRun([`Apply blueprint ${bp.name}`], compactBlueprint(bp));
     await client.post<Blueprint>(`/managed/blueprints/${pk}/apply/`);
     return applyResult(await waitForApply(client, pk, bp.last_applied));
@@ -95,7 +103,11 @@ const applyResult = ({ bp, pending }: { bp: Blueprint; pending: boolean }) =>
         note: "The worker has not finished yet; check again with blueprints_get.",
         blueprint: compactBlueprint(bp),
       }
-    : { applied: bp.status === "successful", blueprint: compactBlueprint(bp) };
+    : {
+        applied: bp.status === "successful" || bp.status === "warning",
+        ...(bp.status === "warning" ? { warnings: true } : {}),
+        blueprint: compactBlueprint(bp),
+      };
 
 export const blueprintsAvailable = defineTool({
   name: "authentik_blueprints_available",
@@ -139,20 +151,27 @@ export const blueprintsInstantiate = defineTool({
       return { applied: false, reason: `No available blueprint at ${args.path}` };
     }
     const name = args.name ?? file.meta?.name ?? args.path;
-    if (!args.confirm) return dryRun([`Instantiate and apply blueprint ${name} (${args.path})`]);
-    // Reuse an instance left by an earlier (e.g. timed-out) call instead of hitting the unique name.
+    // An instance with this name (e.g. left by an earlier timed-out call) is never modified here:
+    // its context or enabled state may be deliberate. Point the caller at blueprints_apply.
     const existing = (
       await client.get<Paginated<Blueprint>>("/managed/blueprints/", { name, page_size: 2 })
-    ).results.find((bp) => bp.name === name && bp.path === args.path);
-    const request = {
+    ).results.find((bp) => bp.name === name);
+    if (existing) {
+      return {
+        applied: false,
+        reason:
+          `A blueprint instance named "${name}" already exists. Review it with ` +
+          "blueprints_get and run blueprints_apply on its pk, or choose another name.",
+        blueprint: compactBlueprint(existing),
+      };
+    }
+    if (!args.confirm) return dryRun([`Instantiate and apply blueprint ${name} (${args.path})`]);
+    const instance = await client.post<Blueprint>("/managed/blueprints/", {
       name,
       path: args.path,
       context: args.context ?? {},
       enabled: true,
-    } satisfies Schema<"BlueprintInstanceRequest">;
-    const instance = existing
-      ? await client.patch<Blueprint>(`/managed/blueprints/${existing.pk}/`, request)
-      : await client.post<Blueprint>("/managed/blueprints/", request);
+    } satisfies Schema<"BlueprintInstanceRequest">);
     await client.post<Blueprint>(`/managed/blueprints/${instance.pk}/apply/`);
     return applyResult(await waitForApply(client, instance.pk, instance.last_applied));
   },

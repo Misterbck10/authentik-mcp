@@ -16,10 +16,19 @@ interface OffboardPlan {
   sessionCount: number;
 }
 
-async function buildPlan(client: AuthentikClient, ref: string | number): Promise<OffboardPlan> {
+async function buildPlan(
+  client: AuthentikClient,
+  ref: string | number,
+  tokenPreview: number,
+): Promise<OffboardPlan> {
   const user = await resolveUser(client, ref);
   const [tokens, sessions] = await Promise.all([
-    listPaginated<Schema<"Token">>(client, "/core/tokens/", { user__username: user.username }, 500),
+    listPaginated<Schema<"Token">>(
+      client,
+      "/core/tokens/",
+      { user__username: user.username },
+      tokenPreview,
+    ),
     listPaginated<Schema<"AuthenticatedSession">>(
       client,
       "/core/authenticated_sessions/",
@@ -36,32 +45,43 @@ async function buildPlan(client: AuthentikClient, ref: string | number): Promise
   };
 }
 
-const MAX_TOKEN_ROUNDS = 50;
+const TOKEN_CONCURRENCY = 5;
+// Leaves headroom under the route's 60 s maxDuration for the steps after token deletion.
+const TOKEN_BUDGET_MS = 30_000;
 
 /**
  * Deletes every token of the user, re-listing until none remain, so users with more tokens
- * than one listing returns are still fully revoked. Throws if tokens are left over.
+ * than one listing returns are still fully revoked. Tokens that vanish meanwhile (404) count
+ * as gone. Stops at the time budget and reports how many remain instead of being killed.
  */
-async function deleteAllTokens(client: AuthentikClient, username: string): Promise<number> {
+async function deleteAllTokens(
+  client: AuthentikClient,
+  username: string,
+): Promise<{ deleted: number; remaining: number }> {
+  const deadline = Date.now() + TOKEN_BUDGET_MS;
   let deleted = 0;
-  for (let round = 0; round < MAX_TOKEN_ROUNDS; round++) {
+  for (;;) {
     const page = await listPaginated<Schema<"Token">>(
       client,
       "/core/tokens/",
       { user__username: username },
       100,
     );
-    if (page.results.length === 0) return deleted;
-    for (const token of page.results) {
-      await client.delete(`/core/tokens/${encodeURIComponent(token.identifier)}/`);
-      deleted++;
-    }
+    if (page.results.length === 0) return { deleted, remaining: 0 };
+    if (Date.now() > deadline) return { deleted, remaining: page.total };
+    const queue = [...page.results];
+    const worker = async () => {
+      for (let token = queue.shift(); token; token = queue.shift()) {
+        try {
+          await client.deleteObject(`/core/tokens/${encodeURIComponent(token.identifier)}/`);
+          deleted++;
+        } catch (error) {
+          if (!(error instanceof AuthentikError && error.status === 404)) throw error;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: TOKEN_CONCURRENCY }, worker));
   }
-  throw new AuthentikError({
-    status: 500,
-    code: "tokens_remaining",
-    message: `Deleted ${deleted} token(s) but some remain; run offboarding again.`,
-  });
 }
 
 export const usersOffboardEmployee = defineTool({
@@ -83,7 +103,8 @@ export const usersOffboardEmployee = defineTool({
     confirm: confirmField,
   }),
   handler: async (args, { client }) => {
-    const plan = await buildPlan(client, args.user);
+    // The token list is only shown in the dry run; confirmed runs re-list while deleting.
+    const plan = await buildPlan(client, args.user, args.confirm ? 1 : 50);
     const { user } = plan;
     const steps = [
       `Deactivate ${user.username}`,
@@ -110,7 +131,7 @@ export const usersOffboardEmployee = defineTool({
     if (args.removeGroups && plan.groups.length) {
       await client.patch(`/core/users/${user.pk}/`, { groups: [] });
     }
-    const deletedTokens = args.revokeTokens ? await deleteAllTokens(client, user.username) : 0;
+    // Sessions before tokens: logging the user out is quick and matters most if time runs out.
     const revokedSessions =
       args.revokeSessions && plan.sessionCount
         ? (
@@ -120,14 +141,25 @@ export const usersOffboardEmployee = defineTool({
             )
           ).deleted
         : 0;
-    if (args.deleteUser) await client.delete(`/core/users/${user.pk}/`);
+    const tokens = args.revokeTokens
+      ? await deleteAllTokens(client, user.username)
+      : { deleted: 0, remaining: 0 };
+    // Deleting the user also removes its remaining tokens.
+    if (args.deleteUser) await client.deleteObject(`/core/users/${user.pk}/`);
+    const complete = tokens.remaining === 0 || args.deleteUser;
 
     return {
-      offboarded: true,
+      offboarded: complete,
       username: user.username,
       deactivated: true,
       removedGroups: args.removeGroups ? plan.groups.map((group) => group.name) : [],
-      deletedTokens,
+      deletedTokens: tokens.deleted,
+      ...(complete
+        ? {}
+        : {
+            remainingTokens: tokens.remaining,
+            note: "Time budget reached; run offboard_employee again to delete the rest.",
+          }),
       revokedSessions,
       deleted: args.deleteUser,
     };

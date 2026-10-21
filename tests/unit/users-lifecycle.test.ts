@@ -190,8 +190,8 @@ describe("authentik_users_offboard_employee", () => {
     expect(calls).toEqual([
       'patch {"is_active":false}',
       'patch {"groups":[]}',
-      "delete token",
       "revoke sessions",
+      "delete token",
     ]);
     expect(result).toMatchObject({ offboarded: true, deleted: false, revokedSessions: 2 });
   });

@@ -46,8 +46,9 @@ async function collectEvents(
       const created = Date.parse(event.created);
       if (created < since) return { events, truncated: false };
       if (created > until) continue;
-      events.push(event);
+      // Truncated only when a further matching event exists beyond the limit.
       if (events.length >= limit) return { events, truncated: true };
+      events.push(event);
     }
     if (!page.pagination.next) return { events, truncated: false };
   }

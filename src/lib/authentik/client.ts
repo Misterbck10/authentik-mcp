@@ -9,6 +9,11 @@ export type Query = Record<string, QueryValue>;
 export interface RequestOptions {
   query?: Query;
   body?: unknown;
+  /**
+   * Single-object DELETE only: a 404 after an attempt that may have reached the server
+   * (timeout or 504) means that attempt already deleted it, so resolve instead of throwing.
+   */
+  goneAfterRetryOk?: boolean;
 }
 
 export interface ClientConfig {
@@ -97,6 +102,11 @@ export class AuthentikClient {
     return this.request<T>("DELETE", path, { query });
   }
 
+  /** DELETE of one object; resolves if a retry finds it already gone (see goneAfterRetryOk). */
+  async deleteObject(path: string): Promise<void> {
+    await this.request<void>("DELETE", path, { goneAfterRetryOk: true });
+  }
+
   async request<T>(method: HttpMethod, path: string, options: RequestOptions = {}): Promise<T> {
     const url = `${this.apiBase}${path.startsWith("/") ? path : `/${path}`}${buildQuery(options.query)}`;
     const attempts = IDEMPOTENT.has(method) ? this.maxRetries + 1 : 1;
@@ -109,20 +119,23 @@ export class AuthentikClient {
       try {
         response = await this.send(method, url, options.body);
       } catch (error) {
+        const timedOut = error instanceof DOMException && error.name === "TimeoutError";
         if (!isLast) {
-          maybeApplied = true;
+          // Only a timeout may have reached the server; refused/DNS failures never did.
+          if (timedOut) maybeApplied = true;
           await this.backoff(attempt);
           continue;
         }
-        const timedOut = error instanceof DOMException && error.name === "TimeoutError";
         throw networkError(timedOut ? "timeout" : "unreachable");
       }
 
       if (response.ok) return (await parseBody(response)) as T;
-      // A retried DELETE that finds nothing means an earlier attempt already deleted it.
-      if (method === "DELETE" && response.status === 404 && maybeApplied) return undefined as T;
+      if (options.goneAfterRetryOk && response.status === 404 && maybeApplied) {
+        return undefined as T;
+      }
       if (!isLast && RETRYABLE_STATUS.has(response.status)) {
-        if (response.status !== 429) maybeApplied = true;
+        // A gateway timeout may hide a processed request; 429/502/503 were not handled.
+        if (response.status === 504) maybeApplied = true;
         await this.backoff(attempt, response.headers.get("retry-after"));
         continue;
       }

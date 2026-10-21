@@ -50,20 +50,19 @@ export const rbacRolesList = defineTool({
       { search: args.search, ordering: "name" },
       env.MCP_MAX_PAGE_ITEMS,
     );
-    // At most ROLE_CONCURRENCY permission lookups in flight, instead of one per role at once.
-    const roles = [];
-    for (let i = 0; i < page.results.length; i += ROLE_CONCURRENCY) {
-      roles.push(
-        ...(await Promise.all(
-          page.results.slice(i, i + ROLE_CONCURRENCY).map(async (role) => ({
-            pk: role.pk,
-            name: role.name,
-            ...(args.includePermissions
-              ? { permissions: await rolePermissions(client, role.pk) }
-              : {}),
-          })),
-        )),
-      );
+    const roles: { pk: string; name: string; permissions?: unknown }[] = page.results.map(
+      (role) => ({ pk: role.pk, name: role.name }),
+    );
+    if (args.includePermissions) {
+      // Worker pool: at most ROLE_CONCURRENCY lookups in flight, refilled as each finishes.
+      let next = 0;
+      const worker = async () => {
+        while (next < roles.length) {
+          const role = roles[next++]!;
+          role.permissions = await rolePermissions(client, role.pk);
+        }
+      };
+      await Promise.all(Array.from({ length: ROLE_CONCURRENCY }, worker));
     }
     return { total: page.total, roles };
   },

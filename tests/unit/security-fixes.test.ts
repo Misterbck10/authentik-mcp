@@ -209,12 +209,40 @@ describe("DELETE retried after a lost response", () => {
           : new HttpResponse(JSON.stringify({ detail: "Not found." }), { status: 404 });
       }),
     );
-    await expect(testClient().delete("/core/tokens/x/")).resolves.toBeUndefined();
+    await expect(testClient().deleteObject("/core/tokens/x/")).resolves.toBeUndefined();
     expect(attempts).toBe(2);
   });
 
   it("still reports 404 when the first attempt already said so", async () => {
     server.use(http.delete(`${API}/core/tokens/y/`, () => new HttpResponse(null, { status: 404 })));
-    await expect(testClient().delete("/core/tokens/y/")).rejects.toMatchObject({ status: 404 });
+    await expect(testClient().deleteObject("/core/tokens/y/")).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("reports 404 after a 503, which the server did not process", async () => {
+    let attempts = 0;
+    server.use(
+      http.delete(`${API}/core/users/999/`, () =>
+        ++attempts === 1
+          ? new HttpResponse(null, { status: 503 })
+          : new HttpResponse(null, { status: 404 }),
+      ),
+    );
+    await expect(testClient().deleteObject("/core/users/999/")).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("plain delete() never hides a 404", async () => {
+    let attempts = 0;
+    server.use(
+      http.delete(`${API}/core/tokens/z/`, () =>
+        ++attempts === 1
+          ? new HttpResponse(null, { status: 504 })
+          : new HttpResponse(null, { status: 404 }),
+      ),
+    );
+    await expect(testClient().delete("/core/tokens/z/")).rejects.toMatchObject({ status: 404 });
   });
 });
