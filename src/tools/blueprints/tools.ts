@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { listPaginated } from "@/lib/authentik/pagination";
-import type { Schema } from "@/lib/authentik/types";
+import type { Paginated, Schema } from "@/lib/authentik/types";
 import { confirmField, dryRun } from "@/lib/safety/confirm";
 import { defineTool } from "../define-tool";
 
@@ -59,26 +59,43 @@ export const blueprintsApply = defineTool({
   handler: async ({ pk, confirm }, { client }) => {
     const bp = await client.get<Blueprint>(`/managed/blueprints/${pk}/`);
     if (!confirm) return dryRun([`Apply blueprint ${bp.name}`], compactBlueprint(bp));
-    const applied = await client.post<Blueprint>(`/managed/blueprints/${pk}/apply/`);
-    return { applied: true, blueprint: compactBlueprint(applied) };
+    await client.post<Blueprint>(`/managed/blueprints/${pk}/apply/`);
+    return applyResult(await waitForApply(client, pk, bp.last_applied));
   },
 });
 
 const FINAL_STATUS = new Set(["successful", "warning", "error", "orphaned"]);
 
-/** Applying is asynchronous (worker task); poll briefly so the result reflects the outcome. */
-async function waitForStatus(
+// Kept well under the route's 60 s maxDuration, leaving room for the surrounding requests.
+const APPLY_WAIT_MS = 20_000;
+
+/**
+ * Applying is asynchronous (worker task); poll briefly until a run newer than `previous`
+ * finishes. Returns `pending` when the worker has not reported back in time.
+ */
+async function waitForApply(
   client: Parameters<typeof listPaginated>[0],
   pk: string,
-  timeoutMs = 30_000,
-): Promise<Blueprint> {
-  const deadline = Date.now() + timeoutMs;
+  previous: string | undefined,
+): Promise<{ bp: Blueprint; pending: boolean }> {
+  const deadline = Date.now() + APPLY_WAIT_MS;
   for (;;) {
     const bp = await client.get<Blueprint>(`/managed/blueprints/${pk}/`);
-    if (FINAL_STATUS.has(bp.status) || Date.now() > deadline) return bp;
+    if (FINAL_STATUS.has(bp.status) && bp.last_applied !== previous) return { bp, pending: false };
+    if (Date.now() > deadline) return { bp, pending: true };
     await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
 }
+
+const applyResult = ({ bp, pending }: { bp: Blueprint; pending: boolean }) =>
+  pending
+    ? {
+        applied: false,
+        pending: true,
+        note: "The worker has not finished yet; check again with blueprints_get.",
+        blueprint: compactBlueprint(bp),
+      }
+    : { applied: bp.status === "successful", blueprint: compactBlueprint(bp) };
 
 export const blueprintsAvailable = defineTool({
   name: "authentik_blueprints_available",
@@ -123,15 +140,21 @@ export const blueprintsInstantiate = defineTool({
     }
     const name = args.name ?? file.meta?.name ?? args.path;
     if (!args.confirm) return dryRun([`Instantiate and apply blueprint ${name} (${args.path})`]);
-    const instance = await client.post<Blueprint>("/managed/blueprints/", {
+    // Reuse an instance left by an earlier (e.g. timed-out) call instead of hitting the unique name.
+    const existing = (
+      await client.get<Paginated<Blueprint>>("/managed/blueprints/", { name, page_size: 2 })
+    ).results.find((bp) => bp.name === name && bp.path === args.path);
+    const request = {
       name,
       path: args.path,
       context: args.context ?? {},
       enabled: true,
-    } satisfies Schema<"BlueprintInstanceRequest">);
+    } satisfies Schema<"BlueprintInstanceRequest">;
+    const instance = existing
+      ? await client.patch<Blueprint>(`/managed/blueprints/${existing.pk}/`, request)
+      : await client.post<Blueprint>("/managed/blueprints/", request);
     await client.post<Blueprint>(`/managed/blueprints/${instance.pk}/apply/`);
-    const result = await waitForStatus(client, instance.pk);
-    return { applied: result.status === "successful", blueprint: compactBlueprint(result) };
+    return applyResult(await waitForApply(client, instance.pk, instance.last_applied));
   },
 });
 

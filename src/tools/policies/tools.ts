@@ -14,10 +14,14 @@ type Binding = Schema<"PolicyBinding">;
 
 const policyPk = z.guid().describe("Policy uuid");
 
+// App labels whose API path differs from the label suffix.
+const POLICY_PATH_OVERRIDES: Record<string, string> = { expiry: "password_expiry" };
+
 /** "authentik_policies_expression.expressionpolicy" -> "expression" */
 function policyPath(policy: Policy): string {
   const app = `${policy.meta_model_name}`.split(".")[0] ?? "";
-  return app.replace(/^authentik_policies_/, "");
+  const path = app.replace(/^authentik_policies_/, "");
+  return POLICY_PATH_OVERRIDES[path] ?? path;
 }
 
 const compactPolicy = (policy: Policy) => ({

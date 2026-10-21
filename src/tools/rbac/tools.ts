@@ -31,6 +31,8 @@ async function rolePermissions(client: AuthentikClient, rolePk: string) {
   return page.results.map((p) => `${p.app_label}.${p.codename}`);
 }
 
+const ROLE_CONCURRENCY = 5;
+
 export const rbacRolesList = defineTool({
   name: "authentik_rbac_roles_list",
   domain: "rbac",
@@ -48,13 +50,21 @@ export const rbacRolesList = defineTool({
       { search: args.search, ordering: "name" },
       env.MCP_MAX_PAGE_ITEMS,
     );
-    const roles = await Promise.all(
-      page.results.map(async (role) => ({
-        pk: role.pk,
-        name: role.name,
-        ...(args.includePermissions ? { permissions: await rolePermissions(client, role.pk) } : {}),
-      })),
-    );
+    // At most ROLE_CONCURRENCY permission lookups in flight, instead of one per role at once.
+    const roles = [];
+    for (let i = 0; i < page.results.length; i += ROLE_CONCURRENCY) {
+      roles.push(
+        ...(await Promise.all(
+          page.results.slice(i, i + ROLE_CONCURRENCY).map(async (role) => ({
+            pk: role.pk,
+            name: role.name,
+            ...(args.includePermissions
+              ? { permissions: await rolePermissions(client, role.pk) }
+              : {}),
+          })),
+        )),
+      );
+    }
     return { total: page.total, roles };
   },
 });
@@ -118,12 +128,12 @@ export const rbacRolesAssignPermissions = defineTool({
   input: z.object({
     role: roleRef,
     permissions: z
-      .array(z.string().regex(/^[a-z_]+\.[a-z_]+$/, 'use "app_label.codename"'))
+      .array(z.string().regex(/^[a-z0-9_]+\.[a-z0-9_]+$/, 'use "app_label.codename"'))
       .min(1)
       .max(200),
     model: z
       .string()
-      .regex(/^[a-z_]+\.[a-z_]+$/)
+      .regex(/^[a-z0-9_]+\.[a-z0-9_]+$/)
       .optional()
       .describe('Object-level: model as "app_label.model", e.g. "authentik_core.application"'),
     objectPk: z.string().max(100).optional(),

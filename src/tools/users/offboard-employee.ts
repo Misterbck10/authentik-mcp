@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AuthentikClient } from "@/lib/authentik/client";
+import { AuthentikError } from "@/lib/authentik/errors";
 import { listPaginated } from "@/lib/authentik/pagination";
 import { resolveUser } from "@/lib/authentik/resolve";
 import type { Schema } from "@/lib/authentik/types";
@@ -11,6 +12,7 @@ interface OffboardPlan {
   user: Schema<"User">;
   groups: { pk: string; name: string }[];
   tokens: Schema<"Token">[];
+  tokenCount: number;
   sessionCount: number;
 }
 
@@ -29,8 +31,37 @@ async function buildPlan(client: AuthentikClient, ref: string | number): Promise
     user,
     groups: (user.groups_obj ?? []).map((group) => ({ pk: group.pk, name: group.name })),
     tokens: tokens.results,
+    tokenCount: tokens.total,
     sessionCount: sessions.total,
   };
+}
+
+const MAX_TOKEN_ROUNDS = 50;
+
+/**
+ * Deletes every token of the user, re-listing until none remain, so users with more tokens
+ * than one listing returns are still fully revoked. Throws if tokens are left over.
+ */
+async function deleteAllTokens(client: AuthentikClient, username: string): Promise<number> {
+  let deleted = 0;
+  for (let round = 0; round < MAX_TOKEN_ROUNDS; round++) {
+    const page = await listPaginated<Schema<"Token">>(
+      client,
+      "/core/tokens/",
+      { user__username: username },
+      100,
+    );
+    if (page.results.length === 0) return deleted;
+    for (const token of page.results) {
+      await client.delete(`/core/tokens/${encodeURIComponent(token.identifier)}/`);
+      deleted++;
+    }
+  }
+  throw new AuthentikError({
+    status: 500,
+    code: "tokens_remaining",
+    message: `Deleted ${deleted} token(s) but some remain; run offboarding again.`,
+  });
 }
 
 export const usersOffboardEmployee = defineTool({
@@ -59,9 +90,10 @@ export const usersOffboardEmployee = defineTool({
       ...(args.removeGroups && plan.groups.length
         ? [`Remove from groups: ${plan.groups.map((group) => group.name).join(", ")}`]
         : []),
-      ...(args.revokeTokens && plan.tokens.length
+      ...(args.revokeTokens && plan.tokenCount
         ? [
-            `Delete ${plan.tokens.length} token(s): ${plan.tokens.map((t) => t.identifier).join(", ")}`,
+            `Delete ${plan.tokenCount} token(s): ${plan.tokens.map((t) => t.identifier).join(", ")}` +
+              (plan.tokenCount > plan.tokens.length ? ", …" : ""),
           ]
         : []),
       ...(args.revokeSessions && plan.sessionCount
@@ -78,11 +110,7 @@ export const usersOffboardEmployee = defineTool({
     if (args.removeGroups && plan.groups.length) {
       await client.patch(`/core/users/${user.pk}/`, { groups: [] });
     }
-    if (args.revokeTokens) {
-      for (const token of plan.tokens) {
-        await client.delete(`/core/tokens/${encodeURIComponent(token.identifier)}/`);
-      }
-    }
+    const deletedTokens = args.revokeTokens ? await deleteAllTokens(client, user.username) : 0;
     const revokedSessions =
       args.revokeSessions && plan.sessionCount
         ? (
@@ -99,7 +127,7 @@ export const usersOffboardEmployee = defineTool({
       username: user.username,
       deactivated: true,
       removedGroups: args.removeGroups ? plan.groups.map((group) => group.name) : [],
-      deletedTokens: args.revokeTokens ? plan.tokens.length : 0,
+      deletedTokens,
       revokedSessions,
       deleted: args.deleteUser,
     };

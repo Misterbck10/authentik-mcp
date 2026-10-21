@@ -23,6 +23,8 @@ function compactEvent(event: Event) {
   };
 }
 
+const MAX_EVENT_PAGES = 50;
+
 /** Pages through events newest-first, applying the date window client-side (API has no date filter). */
 async function collectEvents(
   client: AuthentikClient,
@@ -33,7 +35,7 @@ async function collectEvents(
   const since = window.since ? Date.parse(window.since) : -Infinity;
   const until = window.until ? Date.parse(window.until) : Infinity;
   const events: Event[] = [];
-  for (let pageNumber = 1; pageNumber <= 50; pageNumber++) {
+  for (let pageNumber = 1; pageNumber <= MAX_EVENT_PAGES; pageNumber++) {
     const page = await client.get<Paginated<Event>>("/events/events/", {
       ...query,
       ordering: "-created",
@@ -47,9 +49,10 @@ async function collectEvents(
       events.push(event);
       if (events.length >= limit) return { events, truncated: true };
     }
-    if (!page.pagination.next) break;
+    if (!page.pagination.next) return { events, truncated: false };
   }
-  return { events, truncated: false };
+  // Page cap reached with more events left: the window was not fully scanned.
+  return { events, truncated: true };
 }
 
 const eventFilters = {

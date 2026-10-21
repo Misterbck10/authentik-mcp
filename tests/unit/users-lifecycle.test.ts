@@ -140,11 +140,20 @@ describe("authentik_users_onboard_employee", () => {
 });
 
 describe("authentik_users_offboard_employee", () => {
-  const offboardHandlers = () => [
-    http.get(`${API}/core/users/7/`, () => HttpResponse.json(ana)),
-    http.get(`${API}/core/tokens/`, () => HttpResponse.json(page([{ identifier: "ana-api" }], 1))),
-    http.get(`${API}/core/authenticated_sessions/`, () => HttpResponse.json(page([{}], 2))),
-  ];
+  // Stateful: a deleted token disappears from later listings, like the real API.
+  const offboardHandlers = (calls: string[] = []) => {
+    let tokens = [{ identifier: "ana-api" }];
+    return [
+      http.get(`${API}/core/users/7/`, () => HttpResponse.json(ana)),
+      http.get(`${API}/core/tokens/`, () => HttpResponse.json(page(tokens, tokens.length))),
+      http.delete(`${API}/core/tokens/:identifier/`, ({ params }) => {
+        calls.push("delete token");
+        tokens = tokens.filter((token) => token.identifier !== params.identifier);
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get(`${API}/core/authenticated_sessions/`, () => HttpResponse.json(page([{}], 2))),
+    ];
+  };
 
   it("dry-run lists every step and changes nothing", async () => {
     server.use(...offboardHandlers());
@@ -164,14 +173,10 @@ describe("authentik_users_offboard_employee", () => {
   it("deactivates before anything else and does not delete by default", async () => {
     const calls: string[] = [];
     server.use(
-      ...offboardHandlers(),
+      ...offboardHandlers(calls),
       http.patch(`${API}/core/users/7/`, async ({ request }) => {
         calls.push(`patch ${JSON.stringify(await request.json())}`);
         return HttpResponse.json(ana);
-      }),
-      http.delete(`${API}/core/tokens/ana-api/`, () => {
-        calls.push("delete token");
-        return new HttpResponse(null, { status: 204 });
       }),
       http.delete(`${API}/core/authenticated_sessions/bulk_delete/`, () => {
         calls.push("revoke sessions");

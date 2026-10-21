@@ -101,6 +101,8 @@ export class AuthentikClient {
     const url = `${this.apiBase}${path.startsWith("/") ? path : `/${path}`}${buildQuery(options.query)}`;
     const attempts = IDEMPOTENT.has(method) ? this.maxRetries + 1 : 1;
 
+    // Set once an attempt may have reached the server without us seeing the response.
+    let maybeApplied = false;
     for (let attempt = 1; ; attempt++) {
       const isLast = attempt >= attempts;
       let response: Response;
@@ -108,6 +110,7 @@ export class AuthentikClient {
         response = await this.send(method, url, options.body);
       } catch (error) {
         if (!isLast) {
+          maybeApplied = true;
           await this.backoff(attempt);
           continue;
         }
@@ -116,7 +119,10 @@ export class AuthentikClient {
       }
 
       if (response.ok) return (await parseBody(response)) as T;
+      // A retried DELETE that finds nothing means an earlier attempt already deleted it.
+      if (method === "DELETE" && response.status === 404 && maybeApplied) return undefined as T;
       if (!isLast && RETRYABLE_STATUS.has(response.status)) {
+        if (response.status !== 429) maybeApplied = true;
         await this.backoff(attempt, response.headers.get("retry-after"));
         continue;
       }
