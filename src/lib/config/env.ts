@@ -85,6 +85,11 @@ const envSchema = z
       .optional()
       .transform((url) => url?.replace(/\/+$/, ""))
       .describe("Public origin of this server, used as the OAuth resource identifier"),
+    MCP_HOME_LINK_URL: z
+      .url({ protocol: /^https?$/ })
+      .optional()
+      .describe("Optional link shown as a button on the landing page"),
+    MCP_HOME_LINK_LABEL: z.string().min(1).max(60).default("Continue"),
   })
   .refine((env) => !env.MCP_OAUTH_ISSUER || !!env.MCP_OAUTH_CLIENT_ID, {
     path: ["MCP_OAUTH_CLIENT_ID"],

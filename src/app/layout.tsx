@@ -5,9 +5,14 @@ export const metadata: Metadata = { title: "authentik MCP", robots: { index: fal
 
 const bodyStyle = {
   fontFamily: "system-ui, sans-serif",
-  maxWidth: "45rem",
-  margin: "3rem auto",
-  padding: "0 1rem",
+  margin: 0,
+  padding: "1rem",
+  minHeight: "100vh",
+  boxSizing: "border-box" as const,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#7d9a85",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
