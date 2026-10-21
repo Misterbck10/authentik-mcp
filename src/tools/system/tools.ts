@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { listPaginated } from "@/lib/authentik/pagination";
 import type { Schema } from "@/lib/authentik/types";
+import { diffFields } from "@/lib/branding/brands";
 import { confirmField, dryRun } from "@/lib/safety/confirm";
 import { secureUrl } from "@/lib/validation";
 import { defineTool } from "../define-tool";
@@ -157,18 +158,17 @@ export const systemSettingsUpdate = defineTool({
       impersonation_require_reason: args.impersonationRequireReason,
       default_token_duration: args.defaultTokenDuration,
     };
-    const defined = Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined));
-    if (Object.keys(defined).length === 0) return { changed: false, reason: "No settings given" };
-    if (!args.confirm) {
-      const current = await client.get<Record<string, unknown>>("/admin/settings/");
-      const diff = Object.fromEntries(
-        Object.entries(defined).map(([key, value]) => [key, { from: current[key], to: value }]),
-      );
-      return dryRun([`Update ${Object.keys(defined).length} global setting(s)`], diff);
+    const current = await client.get<Record<string, unknown>>("/admin/settings/");
+    const diff = diffFields(current, changes);
+    if (Object.keys(diff).length === 0) {
+      return { changed: false, reason: "Settings already have these values." };
     }
+    if (!args.confirm)
+      return dryRun([`Update ${Object.keys(diff).length} global setting(s)`], diff);
+    const patch = Object.fromEntries(Object.entries(diff).map(([key, value]) => [key, value.to]));
     return {
       changed: true,
-      settings: await client.patch<Schema<"Settings">>("/admin/settings/", defined),
+      settings: await client.patch<Schema<"Settings">>("/admin/settings/", patch),
     };
   },
 });

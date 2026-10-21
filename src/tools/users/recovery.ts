@@ -29,6 +29,22 @@ export interface RecoveryResult {
   link?: string;
 }
 
+const NO_RECOVERY_FLOW_HINT =
+  "The brand has no recovery flow. Create one (e.g. apply the 'Example - Recovery with email " +
+  "verification' blueprint) and set it with authentik_branding_brands_update { recoveryFlow }.";
+
+/** Rewrites authentik's terse "No recovery flow set." into an actionable error. */
+function explainRecoveryError(error: unknown): never {
+  if (error instanceof AuthentikError && /no recovery flow/i.test(error.message)) {
+    throw new AuthentikError({
+      status: 400,
+      code: "no_recovery_flow",
+      message: NO_RECOVERY_FLOW_HINT,
+    });
+  }
+  throw error;
+}
+
 /** Sends a recovery email or creates a recovery link (requires a recovery flow on the brand). */
 export async function sendRecovery(
   client: AuthentikClient,
@@ -36,9 +52,11 @@ export async function sendRecovery(
   options: { mode: "email" | "link"; emailStage?: string; tokenDuration?: string },
 ): Promise<RecoveryResult> {
   if (options.mode === "link") {
-    const { link } = await client.post<Schema<"Link">>(`/core/users/${user.pk}/recovery/`, {
-      token_duration: options.tokenDuration,
-    });
+    const { link } = await client
+      .post<Schema<"Link">>(`/core/users/${user.pk}/recovery/`, {
+        token_duration: options.tokenDuration,
+      })
+      .catch(explainRecoveryError);
     return { mode: "link", link };
   }
   if (!user.email) {
@@ -48,9 +66,11 @@ export async function sendRecovery(
       message: `User ${user.username} has no email address; use mode 'link'.`,
     });
   }
-  await client.post(`/core/users/${user.pk}/recovery_email/`, {
-    email_stage: await resolveEmailStagePk(client, options.emailStage),
-    token_duration: options.tokenDuration,
-  });
+  await client
+    .post(`/core/users/${user.pk}/recovery_email/`, {
+      email_stage: await resolveEmailStagePk(client, options.emailStage),
+      token_duration: options.tokenDuration,
+    })
+    .catch(explainRecoveryError);
   return { mode: "email", sentTo: user.email };
 }

@@ -173,3 +173,33 @@ describe("domain gating", () => {
     expect(names.every((name) => /^authentik_[a-z_]+$/.test(name))).toBe(true);
   });
 });
+
+describe("live-test regressions", () => {
+  it("settings_update reports no change when values already match", async () => {
+    server.use(
+      http.get(`${API}/admin/settings/`, () =>
+        HttpResponse.json({ base_url: "https://same.test" }),
+      ),
+    );
+    const result = await systemSettingsUpdate.handler(
+      systemSettingsUpdate.input.parse({ baseUrl: "https://same.test" }),
+      ctx(),
+    );
+    expect(result).toMatchObject({ changed: false });
+  });
+
+  it("explains a missing recovery flow", async () => {
+    const { sendRecovery } = await import("@/tools/users/recovery");
+    server.use(
+      http.post(`${API}/core/users/7/recovery/`, () =>
+        HttpResponse.json({ non_field_errors: ["No recovery flow set."] }, { status: 400 }),
+      ),
+    );
+    await expect(
+      sendRecovery(testClient(), { pk: 7, username: "u" } as never, { mode: "link" }),
+    ).rejects.toMatchObject({
+      code: "no_recovery_flow",
+      message: expect.stringMatching(/recoveryFlow/),
+    });
+  });
+});

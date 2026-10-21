@@ -16,7 +16,8 @@ export const filesList = defineTool({
     const files = await listFiles(client, args.search);
     return {
       count: files.length,
-      files: files.map((f) => ({ name: f.name, mimeType: f.mime_type, url: f.url })),
+      // Signed access tokens in the query string are stripped; they are credentials.
+      files: files.map((f) => ({ name: f.name, mimeType: f.mime_type, url: f.url.split("?")[0] })),
     };
   },
 });
