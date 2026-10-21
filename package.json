@@ -13,7 +13,8 @@
     "generate:types": "tsx scripts/generate-types.ts",
     "test:integration": "docker compose -f docker-compose.test.yml up -d && vitest run --config vitest.integration.config.ts",
     "test:integration:down": "docker compose -f docker-compose.test.yml down -v",
-    "docs:tools": "tsx --tsconfig tsconfig.json scripts/tools-table.ts"
+    "docs:tools": "tsx --tsconfig tsconfig.json scripts/tools-table.ts",
+    "verify:permissions": "tsx --tsconfig tsconfig.json scripts/verify-permissions.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
